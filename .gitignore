@@ -1,0 +1,12 @@
+# Ignore everything in the root
+/*
+# white-list
+## directories
+!/src/
+#!/build/
+## files
+!.gitignore
+!package-lock.json
+!package.json
+!tsconfig.json
+!TestData.csv
