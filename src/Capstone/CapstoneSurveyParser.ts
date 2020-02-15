@@ -1,15 +1,15 @@
 import * as fs from 'fs';
 
-import { ISurveyEntry, IParser } from '../types';
+import { SurveyEntry, Parser } from '../types';
 
-export class CapstoneSurveyParser implements IParser<ISurveyEntry> {
-  private _data: ISurveyEntry[] | null;
+export class CapstoneSurveyParser implements Parser<SurveyEntry> {
+  private _data: SurveyEntry[] | null;
   constructor(public filePath: string) {
     this._data = null;
     this.parse();
   }
 
-  get data() {
+  get data(): SurveyEntry[] | null {
     return this._data;
   }
   convertCSVtoString(filePath: string): string {
@@ -22,14 +22,16 @@ export class CapstoneSurveyParser implements IParser<ISurveyEntry> {
   }
 
   parseSurveyCSV(data: string): string[] {
+    data = data.replace(/"/g, '');
     const rows = data.split('\n');
     // top row is column names so byebye
     return rows.slice(1);
   }
 
-  parseSurveyRow(row: string): ISurveyEntry {
+  parseSurveyRow(row: string): SurveyEntry {
     const [
-      timeStamp,
+      ,
+      // omitting timeStamp
       name,
       choice1,
       choice2,
@@ -48,7 +50,7 @@ export class CapstoneSurveyParser implements IParser<ISurveyEntry> {
     };
   }
 
-  parse() {
+  parse(): void {
     const csvString = this.convertCSVtoString(this.filePath);
     const entries = this.parseSurveyCSV(csvString);
     this._data = entries.map(entry => this.parseSurveyRow(entry));
