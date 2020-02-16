@@ -7,20 +7,32 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "ts-node src/index.ts",
-    "lint": "node_modules/.bin/eslint ./src/**/*"
+    "lint": "node_modules/.bin/eslint ./src/**/*",
+    "build:chord": "./node_modules/.bin/webpack --mode development --config webpack.chord.config.js",
+    "display:chord": "npm run build:chord && ./node_modules/.bin/live-server --mount=/:./charts/chordDiagram ./charts/chordDiagram/index.html "
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@types/node": "^13.7.1",
     "dotenv": "^8.2.0"
   },
   "devDependencies": {
+    "@amcharts/amcharts4": "^4.9.1",
+    "@babel/core": "^7.8.4",
+    "@babel/plugin-syntax-dynamic-import": "^7.8.3",
+    "@babel/preset-env": "^7.8.4",
+    "@types/core-js": "^2.5.3",
+    "@types/node": "^13.7.1",
     "@typescript-eslint/eslint-plugin": "^2.19.2",
     "@typescript-eslint/parser": "^2.19.2",
+    "babel-loader": "^8.0.6",
     "eslint": "^6.8.0",
     "eslint-config-prettier": "^6.10.0",
-    "typescript": "^3.7.5"
+    "live-server": "^1.2.1",
+    "source-map-loader": "^0.2.4",
+    "typescript": "^3.7.5",
+    "webpack": "^4.41.6",
+    "webpack-cli": "^3.3.11"
   }
 }

@@ -7,4 +7,5 @@ const fileName = process.env.FILE_NAME as string;
 const filePath = path.resolve('.', fileName);
 
 const capstoneTeamGenerator = TeamGenerator.teamsFromCapstoneSurvey(filePath);
-capstoneTeamGenerator.exportData();
+// capstoneTeamGenerator.export('chord');
+console.log(capstoneTeamGenerator.createTeams(3));

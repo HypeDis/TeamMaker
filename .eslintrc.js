@@ -1,8 +1,12 @@
 module.exports = {
   parser: '@typescript-eslint/parser',
+  env: {
+    node: true,
+    browser: true,
+  },
   parserOptions: {
-    ecmaVersion: 6,
-    sourceType: 'module',
+    // ecmaVersion: 6,
+    // sourceType: 'module',
     tsconfigRootDir: __dirname,
     project: ['./tsconfig.json'],
     // ecmaFeatures: {

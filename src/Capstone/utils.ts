@@ -1,4 +1,10 @@
-import { NodeData, SurveyEntry, GraphEdge, GraphNode } from '../types';
+import {
+  NodeData,
+  SurveyEntry,
+  GraphEdge,
+  GraphNode,
+  AmchartEdge,
+} from '../types';
 export function calcCapstoneCompatability(
   person1: SurveyEntry,
   person2: SurveyEntry
@@ -55,14 +61,30 @@ export function updateCapSurveyNodeList(
   }
 }
 
-export function updateCapSurveyEdgeList(
-  edgeList: GraphEdge[],
+export function generateCapSurveyEdge(
+  edgeList: GraphEdge[] | null,
   n1: GraphNode,
   n2: GraphNode,
-  edgeWeight: number
-): void {
+  edgeWeight: number,
+  minWeight: number
+): GraphEdge | null {
+  if (edgeWeight < minWeight) {
+    return null;
+  }
   const n1n2Edge = { from: n1.id, to: n2.id, value: edgeWeight };
-  edgeList.push(n1n2Edge);
+  return n1n2Edge;
+}
+
+export function generateCapstoneAmChartEdge(
+  edge: GraphEdge,
+  n1: NodeData<SurveyEntry>,
+  n2: NodeData<SurveyEntry>
+): AmchartEdge {
+  const acEdge: AmchartEdge = { from: '', to: '', value: 0 };
+  acEdge.from = n1.data.name;
+  acEdge.to = n2.data.name;
+  acEdge.value = edge.value ? edge.value : 1;
+  return acEdge;
 }
 
 export function updateCapstoneGraph(
@@ -70,7 +92,8 @@ export function updateCapstoneGraph(
   n2: NodeData<SurveyEntry>,
   adjMatrix: number[][],
   nodeList: GraphNode[],
-  edgeList: GraphEdge[]
+  edgeList: GraphEdge[],
+  amChartEdgeList: AmchartEdge[]
 ): void {
   const n1Id = n1.id; //row
   const n2Id = n2.id; // col
@@ -85,5 +108,16 @@ export function updateCapstoneGraph(
 
   updateCapSurveyNodeList(nodeList, n1Node, n2Node);
 
-  updateCapSurveyEdgeList(edgeList, n1Node, n2Node, compatibility);
+  const edge = generateCapSurveyEdge(
+    edgeList,
+    n1Node,
+    n2Node,
+    compatibility,
+    2
+  );
+  if (edge) {
+    edgeList.push(edge);
+    const amChartEdge = generateCapstoneAmChartEdge(edge, n1, n2);
+    amChartEdgeList.push(amChartEdge);
+  }
 }

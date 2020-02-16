@@ -19,7 +19,7 @@ export interface GraphNode {
 export interface GraphEdge {
   from: number;
   to: number;
-  value?: number;
+  value: number;
 }
 export interface NodeData<Entry> {
   data: Entry;
@@ -32,7 +32,8 @@ export interface UpdateGraph<Entry> {
     n2: NodeData<Entry>,
     adjMatrix: number[][],
     nodeList: GraphNode[],
-    edgeList: GraphEdge[]
+    edgeList: GraphEdge[],
+    amchartEdgeList: AmchartEdge[]
   ): void;
 }
 
@@ -42,4 +43,14 @@ export interface UpdateNodeList {
 
 export interface UpdateEdgeList {
   (edgeList: GraphEdge[], n1: GraphNode, n2: GraphNode): void;
+}
+
+export interface GenerateAmchartEdgeList<Entry> {
+  (edgeList: GraphEdge[], data: Entry[]): AmchartEdge[];
+}
+
+export interface AmchartEdge {
+  from: string | number;
+  to: string | number;
+  value: number;
 }
