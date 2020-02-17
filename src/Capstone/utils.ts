@@ -4,73 +4,59 @@ import {
   GraphEdge,
   GraphNode,
   AmchartEdge,
+  UpdateNodeList,
+  UpdateGraph,
 } from '../types';
+
 export function calcCapstoneCompatability(
   person1: SurveyEntry,
   person2: SurveyEntry
 ): number[] {
-  // (l + m) where l and m are person1's choice rank of person2 and vice versa
-  // sum(n) + sum(3p) where n is default option match and p is write-in match
-  // sum of all the terms will be the compatibility score
   const defaults = ['Web App', 'Mobile', 'Desktop', 'Game'];
-  let compatibilityScore = 0;
+  let appCompatibilityScore = 0;
   const p1p2Rank = person1.partnerPreferences.indexOf(person2.name);
   const p2p1Rank = person2.partnerPreferences.indexOf(person1.name);
-  const p2Score = p1p2Rank >= 0 ? 5 - p1p2Rank : 0;
-  const p1Score = p2p1Rank >= 0 ? 5 - p2p1Rank : 0;
-  // 5 is hard coded b/c survey has 5 choices
-  compatibilityScore += p2Score;
-  compatibilityScore += p1Score;
+  const choices = person1.partnerPreferences.length;
+  const p2Score = p1p2Rank >= 0 ? choices - p1p2Rank : 0;
+  const p1Score = p2p1Rank >= 0 ? choices - p2p1Rank : 0;
+
+  // app preference matching
   person1.appPreferences.forEach(pref => {
     if (person2.appPreferences.includes(pref)) {
-      compatibilityScore += 1;
+      appCompatibilityScore += 1;
       if (!defaults.includes(pref)) {
-        compatibilityScore += 2;
+        appCompatibilityScore += 2;
       }
     }
   });
-  return [compatibilityScore, p1Score, p2Score];
+  return [appCompatibilityScore, p1Score, p2Score];
 }
 
-export function updateCapSurveyNodeList(
+const updateCapSurveyNodeList: UpdateNodeList = (
   nodeList: GraphNode[],
-  n1: GraphNode,
-  n2: GraphNode
-): void {
-  const n1Idx = nodeList.findIndex(node => node.id === n1.id);
-  const n2Idx = nodeList.findIndex(node => node.id === n2.id);
-  let n1Node;
-  let n2Node;
-  if (n1Idx === -1) {
-    n1Node = { id: n1.id, value: n1.value, label: n1.label };
-    nodeList.push(n1Node);
-  } else {
-    n1Node = nodeList[n1Idx];
-    if (typeof n1Node.value === 'number' && typeof n1.value === 'number') {
-      n1Node.value += n1.value;
+  incomingNode: GraphNode
+): void => {
+  const nIdx = nodeList.findIndex(node => node.id === incomingNode.id);
+  if (nIdx === -1) nodeList.push(incomingNode);
+  else {
+    const updatedNode = nodeList[nIdx];
+    if (
+      typeof updatedNode.value === 'number' &&
+      typeof incomingNode.value === 'number'
+    ) {
+      updatedNode.value += incomingNode.value;
     }
   }
-  if (n2Idx === -1) {
-    n2Node = { id: n2.id, value: n2.value, label: n2.label };
-    nodeList.push(n2Node);
-  } else {
-    n2Node = nodeList[n2Idx];
-    if (typeof n2Node.value === 'number' && typeof n2.value === 'number') {
-      n2Node.value += n2.value;
-    }
-  }
-}
+};
 
 export function generateCapSurveyEdge(
-  edgeList: GraphEdge[] | null,
   n1: GraphNode,
   n2: GraphNode,
   edgeWeight: number,
-  minWeight: number
+  minWeight = 1
 ): GraphEdge | null {
-  if (edgeWeight < minWeight) {
-    return null;
-  }
+  if (edgeWeight < minWeight) return null;
+
   const n1n2Edge = { from: n1.id, to: n2.id, value: edgeWeight };
   return n1n2Edge;
 }
@@ -87,37 +73,46 @@ export function generateCapstoneAmChartEdge(
   return acEdge;
 }
 
-export function updateCapstoneGraph(
+export const updateCapstoneGraph: UpdateGraph<SurveyEntry> = (
   n1: NodeData<SurveyEntry>,
   n2: NodeData<SurveyEntry>,
   adjMatrix: number[][],
   nodeList: GraphNode[],
   edgeList: GraphEdge[],
   amChartEdgeList: AmchartEdge[]
-): void {
-  const n1Id = n1.id; //row
+): void => {
+  const n1Id = n1.id; // row
   const n2Id = n2.id; // col
-  const [compatibility, p1Score, p2Score] = calcCapstoneCompatability(
+
+  if (n1Id === n2Id) {
+    return;
+  }
+
+  const [appCompatibility, p1Score, p2Score] = calcCapstoneCompatability(
     n1.data,
     n2.data
   );
-  adjMatrix[n1Id][n2Id] = compatibility;
+  if (!adjMatrix[n1Id][n2Id]) {
+    adjMatrix[n1Id][n2Id] = p2Score;
+  }
+  if (!adjMatrix[n2Id][n1Id]) {
+    adjMatrix[n2Id][n1Id] = p1Score;
+  }
 
   const n1Node = { id: n1Id, label: n1.data.name, value: p1Score };
   const n2Node = { id: n2Id, label: n2.data.name, value: p2Score };
 
-  updateCapSurveyNodeList(nodeList, n1Node, n2Node);
+  updateCapSurveyNodeList(nodeList, n1Node);
 
-  const edge = generateCapSurveyEdge(
-    edgeList,
+  const directedEdge = generateCapSurveyEdge(
     n1Node,
     n2Node,
-    compatibility,
-    2
+    p2Score + appCompatibility,
+    3
   );
-  if (edge) {
-    edgeList.push(edge);
-    const amChartEdge = generateCapstoneAmChartEdge(edge, n1, n2);
+  if (directedEdge) {
+    const amChartEdge = generateCapstoneAmChartEdge(directedEdge, n1, n2);
+    edgeList.push(directedEdge);
     amChartEdgeList.push(amChartEdge);
   }
-}
+};

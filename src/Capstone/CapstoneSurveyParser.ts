@@ -16,8 +16,8 @@ export class CapstoneSurveyParser implements Parser<SurveyEntry> {
     try {
       return fs.readFileSync(filePath, { encoding: 'utf-8' });
     } catch (err) {
-      console.error('******* Error reading file ******** \n', err);
-      return err;
+      console.error('******* Error reading file ******** \n');
+      throw err;
     }
   }
 
@@ -54,5 +54,10 @@ export class CapstoneSurveyParser implements Parser<SurveyEntry> {
     const csvString = this.convertCSVtoString(this.filePath);
     const entries = this.parseSurveyCSV(csvString);
     this._data = entries.map(entry => this.parseSurveyRow(entry));
+    this._data.sort((p1, p2) => {
+      if (p1.name < p2.name) return -1;
+
+      return 1;
+    });
   }
 }

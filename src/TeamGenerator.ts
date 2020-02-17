@@ -1,4 +1,5 @@
 import * as fs from 'fs';
+import * as path from 'path';
 import {
   SurveyEntry,
   Parser,
@@ -6,15 +7,19 @@ import {
   GraphNode,
   UpdateGraph,
   AmchartEdge,
+  NodeTable,
 } from './types';
 import { CapstoneSurveyParser } from './Capstone/CapstoneSurveyParser';
 import { updateCapstoneGraph } from './Capstone/utils';
+import { shuffleArray, generateNodeTable } from './utils/index';
+import { NULL_ENTRY_DATA_ERROR, EXPORT_TEAMS_OPTIONS_ERROR } from './errors';
+const OUTPUT_DIR = process.env.OUTPUT_DIR || './';
 
-interface GetEdgeWeight<Entry> {
-  (n1: Entry, n2: Entry): number;
+interface FormattedOutput {
+  [key: string]: any;
 }
 
-export class TeamGenerator<Entry> {
+export class TeamGenerator<Entry extends { [key: string]: any }> {
   static teamsFromCapstoneSurvey(filePath: string): TeamGenerator<SurveyEntry> {
     return new TeamGenerator<SurveyEntry>(
       new CapstoneSurveyParser(filePath),
@@ -22,7 +27,7 @@ export class TeamGenerator<Entry> {
     );
   }
 
-  private data: Entry[] | null;
+  private entryData: Entry[] | null;
   private adjMatrix: number[][];
   private nodeList: GraphNode[];
   private edgeList: GraphEdge[];
@@ -32,7 +37,7 @@ export class TeamGenerator<Entry> {
     private parser: Parser<Entry>,
     private updateGraph: UpdateGraph<Entry>
   ) {
-    this.data = [];
+    this.entryData = [];
     this.adjMatrix = [[]];
     this.nodeList = [];
     this.edgeList = [];
@@ -41,14 +46,14 @@ export class TeamGenerator<Entry> {
   }
 
   get rawData(): {
-    data: Entry[] | null;
+    entryData: Entry[] | null;
     adjMatrix: number[][];
     nodeList: GraphNode[];
     edgeList: GraphEdge[];
     amchartEdgeList: AmchartEdge[];
   } {
     return {
-      data: this.data,
+      entryData: this.entryData,
       adjMatrix: this.adjMatrix,
       nodeList: this.nodeList,
       edgeList: this.edgeList,
@@ -58,44 +63,29 @@ export class TeamGenerator<Entry> {
 
   private load(): void {
     this.parser.parse();
-    this.data = this.parser.data;
+    this.entryData = this.parser.data;
     this.generateGraph();
   }
 
-  initializeMatrix(): void {
-    if (!this.data) {
-      console.log('no data');
-      return;
-    }
-    const numEntries = this.data.length;
+  private initializeMatrix(): void {
+    if (!this.entryData) throw NULL_ENTRY_DATA_ERROR;
+
+    const numEntries = this.entryData.length;
     this.adjMatrix = Array(numEntries)
       .fill(null)
       .map(() => Array(numEntries).fill(0));
   }
-  generateGraph(): void {
-    if (!this.data || !this.data.length) {
-      console.log('There is no data');
-      return;
-    }
+
+  private generateGraph(): void {
+    if (!this.entryData || !this.entryData.length) throw NULL_ENTRY_DATA_ERROR;
+
     this.initializeMatrix();
 
-    const entries = this.data.length;
+    const entries = this.entryData.length;
     for (let row = 0; row < entries; row += 1) {
       for (let col = 0; col < entries; col += 1) {
-        /*
-        I am making an assumption that the graph is undirected:
-        matrix[a][b] will have the same value as matrix[b][a] (symmetry about a=b axis)
-        therefore this function will only fill half the grid
-        with a total of nCr edges where n = number of entries and r = 2 representing a pair of nodes
-        */
-        if (row === col || this.adjMatrix[col][row]) {
-          continue;
-        }
-        const n1 = this.data[row];
-        const n2 = this.data[col];
-        //  {n1Data, n1Id} {n2Data, n2Id}, adjMatrix, nodeList, edgeList
-        // const edgeWeight = this.calcEdgeWeight(n1, n2);
-        // this.adjMatrix[row][col] = edgeWeight;
+        const n1 = this.entryData[row];
+        const n2 = this.entryData[col];
         this.updateGraph(
           { data: n1, id: row },
           { data: n2, id: col },
@@ -108,91 +98,122 @@ export class TeamGenerator<Entry> {
     }
   }
 
-  createTeams(groupSize: number): number[][] | null {
-    if (!this.data) {
-      console.error('No Data!');
-      return null;
-    }
-    const numTeams = Math.floor(this.data.length / groupSize);
+  // creates groups using the id of each node, pass in outputKeys to format the groups using entry data.
+  private createTeams(
+    groupSize: number,
+    outputKeys: string[] | null = null
+  ): number[][] | FormattedOutput[][] {
+    if (!this.entryData) throw NULL_ENTRY_DATA_ERROR;
 
-    const groups = Array(numTeams)
+    const numTeams = Math.floor(this.entryData.length / groupSize);
+
+    let groups = Array(numTeams)
       .fill(null)
       .map((): number[] => []);
 
-    const nodeTable = this.nodeList.reduce(
-      (table: { [key: number]: GraphNode }, curNode) => {
-        table[curNode.id] = curNode;
-        return table;
-      },
-      {}
-    );
+    const nodeTable = generateNodeTable(this.nodeList);
 
-    const el = this.edgeList.slice();
+    // the first round, 5 random captains are chosen
+    // each round the groups are shuffled and they pick the person
+    // that they are most compatible with from the remaining pool
+    let count = 0;
+    while (Object.keys(nodeTable).length) {
+      if (count > groups.length - 1) count = 0;
+      // shuffle the array every round
+      if (count === 0) groups = shuffleArray(groups, 3);
 
-    el.sort((e1, e2) => {
-      if (e1.value < e2.value) {
-        return -1;
-      } else {
-        return 1;
+      const nextPick = this.findMostCompatibleMember(groups[count], nodeTable);
+      groups[count].push(nextPick);
+      delete nodeTable[nextPick];
+
+      count += 1;
+    }
+    if (!outputKeys || (outputKeys && !outputKeys.length)) return groups;
+
+    return this.formatGroups(groups, outputKeys);
+  }
+
+  private formatGroups(
+    groups: number[][],
+    outputKeys: string[]
+  ): FormattedOutput[][] {
+    // outputKeys should match the keys in an Entry
+    if (!this.entryData) throw NULL_ENTRY_DATA_ERROR;
+
+    const formattedGroups: FormattedOutput[][] = [];
+    for (const group of groups) {
+      const formattedGroup: FormattedOutput[] = [];
+      for (let i = 0; i < group.length; i += 1) {
+        const id = group[i];
+        const entry = this.entryData[id];
+        const output: FormattedOutput = {};
+        for (const label of outputKeys) {
+          output[label] = entry[label];
+        }
+        formattedGroup.push(output);
       }
-    });
+      formattedGroups.push(formattedGroup);
+    }
+    return formattedGroups;
+  }
 
-    // initialize the teams as groups of 2, according to the highest edge weights
-    for (let i = 0; i < numTeams; i += 1) {
-      if (!Object.keys(nodeTable).length || !el.length) {
-        console.error('Not enough people for given group size');
-        return groups;
-      }
-      let picked = false;
-      while (!picked) {
-        const curEdge = el.pop() as GraphEdge;
-        const p1 = curEdge.from;
-        const p2 = curEdge.to;
-        // check that the people in this edge havent been picked yet
-        if (p1 in nodeTable && p2 in nodeTable) {
-          groups[i].push(p1, p2);
-          delete nodeTable[p1];
-          delete nodeTable[p2];
-          picked = true;
+  private findMostCompatibleMember(
+    group: number[],
+    availablePicks: NodeTable
+  ): number {
+    // sum the edge weights between a candidate and all current group members
+    // find the candidate with the greatest sum
+    let mostCompatibleId = -1;
+    let maxScore = 0;
+    if (group.length) {
+      for (const pick in availablePicks) {
+        const pickId = availablePicks[pick].id;
+        let totalScore = 0;
+        for (const member of group) {
+          // this logic is due to earlier decision to only create half the adjacency matrix
+          totalScore +=
+            this.adjMatrix[member][pickId] || this.adjMatrix[pickId][member];
+        }
+        if (totalScore > maxScore) {
+          maxScore = totalScore;
+          mostCompatibleId = pickId;
         }
       }
     }
 
-    // each round the groups pick in random order the person from the remaining pool
-    // that they are most compatible with
-    let count = 0;
-    while (Object.keys(nodeTable).length) {
-      if (count > groups.length - 1) {
-        count = 0;
-      }
-      if (count === 0) {
-        // shuffle the array again
-      }
-
-      const nextPick = this.findMostCompatibleMember(groups[count], nodeTable);
-      groups[count].push(nextPick);
-
-      count += 1;
+    // if everyone remaining has 0 compatibility with group or group is empty
+    // pick a random person from the pool
+    if (mostCompatibleId === -1) {
+      let pickIds = Object.keys(availablePicks);
+      pickIds = shuffleArray(pickIds, 3);
+      mostCompatibleId = parseInt(pickIds[0]);
     }
-    return groups;
+    return mostCompatibleId;
   }
 
-  findMostCompatibleMember(group, availableEntries): number {
-    // sum the edge weights between a candidate and all current group members
-    // find the candidate with the greatest sum
-    let mostCompatible = null;
-    let score = 0;
-    for (let entry in availableEntries) {
-      
-    }
-  }
-  export(type: string): void {
+  export(
+    type: string,
+    options: {
+      groupSize?: number;
+      trialRuns?: number;
+      outputKeys?: string[];
+    } | null = null
+  ): void {
     switch (type) {
-      case 'all':
-        this.exportAllData();
+      case 'raw':
+        this.exportJSON('raw_data', this.rawData);
         break;
       case 'chord':
-        this.exportChordDiagramData();
+        this.exportJSON('chord_diagram', this.amchartEdgeList);
+        break;
+      case 'teams':
+        if (!options || !options.groupSize) throw EXPORT_TEAMS_OPTIONS_ERROR;
+
+        this.exportTeams(
+          options.groupSize || 1,
+          options.outputKeys || null,
+          options.trialRuns || 1
+        );
         break;
       default:
         console.log('Export Type not found');
@@ -200,14 +221,27 @@ export class TeamGenerator<Entry> {
     }
   }
 
-  exportAllData(): void {
-    const dataString = JSON.stringify(this.rawData);
-    fs.writeFileSync('all_data.json', dataString);
-    console.log('File Created: allData.json');
+  private exportJSON(fileName: string, data: any): void {
+    const serializedData = JSON.stringify(data);
+    if (!fs.existsSync(OUTPUT_DIR)) {
+      fs.mkdirSync(OUTPUT_DIR, { recursive: true });
+    }
+    fs.writeFileSync(
+      path.resolve(OUTPUT_DIR, `${fileName}.json`),
+      serializedData
+    );
+    console.log(`File Created: ${fileName}.json`);
   }
-  exportChordDiagramData(): void {
-    const dataString = JSON.stringify(this.amchartEdgeList);
-    fs.writeFileSync('chord_diagram.json', dataString);
-    console.log('File Created: chord_diagram.json');
+
+  private exportTeams(
+    groupSize: number,
+    outputKeys: string[] | null,
+    trialRuns: number
+  ): void {
+    const output: { [key: number]: number[][] | FormattedOutput[][] } = {};
+    for (let i = 0; i < trialRuns; i += 1) {
+      output[i] = this.createTeams(groupSize, outputKeys);
+    }
+    this.exportJSON('teams', output);
   }
 }

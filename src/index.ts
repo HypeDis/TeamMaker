@@ -2,10 +2,16 @@ import dotenv from 'dotenv';
 dotenv.config();
 import * as path from 'path';
 import { TeamGenerator } from './TeamGenerator';
+import { FILE_PATH_ERROR } from './errors';
 
-const fileName = process.env.FILE_NAME as string;
-const filePath = path.resolve('.', fileName);
+const filePath = process.env.FILE_PATH;
+if (!filePath) throw FILE_PATH_ERROR;
 
 const capstoneTeamGenerator = TeamGenerator.teamsFromCapstoneSurvey(filePath);
-// capstoneTeamGenerator.export('chord');
-console.log(capstoneTeamGenerator.createTeams(3));
+capstoneTeamGenerator.export('raw');
+capstoneTeamGenerator.export('chord');
+capstoneTeamGenerator.export('teams', {
+  groupSize: 3,
+  trialRuns: 1,
+  outputKeys: ['name'],
+});

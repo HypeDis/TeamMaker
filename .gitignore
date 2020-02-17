@@ -3,7 +3,8 @@
 # white-list
 ## directories
 !/src/
-#!/build/
+!/charts
+**/build
 ## files
 !.gitignore
 !package-lock.json
@@ -13,3 +14,4 @@
 !.prettierrc.js
 !.eslintrc.js
 !readme.md
+!webpack*.config.js

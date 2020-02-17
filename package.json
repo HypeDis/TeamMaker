@@ -9,7 +9,7 @@
     "start": "ts-node src/index.ts",
     "lint": "node_modules/.bin/eslint ./src/**/*",
     "build:chord": "./node_modules/.bin/webpack --mode development --config webpack.chord.config.js",
-    "display:chord": "npm run build:chord && ./node_modules/.bin/live-server --mount=/:./charts/chordDiagram ./charts/chordDiagram/index.html "
+    "display:chord": "npm run build:chord && ./node_modules/.bin/live-server --mount=/:./charts/chordDiagram ./charts/chordDiagram/index.html"
   },
   "keywords": [],
   "author": "",
